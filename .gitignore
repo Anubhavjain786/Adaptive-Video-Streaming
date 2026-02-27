@@ -1,0 +1,24 @@
+# Test videos
+test/
+
+# LocalStack volume data
+localstack-data/
+
+# Node
+node_modules/
+infra/node_modules/
+dist/
+
+# Build output
+apps/backend/dist/
+apps/frontend/dist/
+
+# Serverless Framework
+infra/.serverless/
+
+# Environment
+.env
+.env.local
+
+# macOS
+.DS_Store

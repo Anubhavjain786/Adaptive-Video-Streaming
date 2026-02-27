@@ -1,0 +1,21 @@
+{
+  "name": "adaptive-video-streaming",
+  "version": "1.0.0",
+  "description": "YouTube-style adaptive video streaming POC on AWS serverless",
+  "author": "Anubhav Jain",
+  "license": "ISC",
+  "private": true,
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend"
+  ],
+  "scripts": {
+    "backend": "npm run start:dev --workspace=apps/backend",
+    "frontend": "npm run dev --workspace=apps/frontend",
+    "deploy": "cd infra && npm install && npx serverless deploy --stage dev",
+    "localstack:up": "docker compose up -d localstack",
+    "localstack:down": "docker compose down",
+    "deploy:local": "cd infra && npm install && FFMPEG_PATH=$(which ffmpeg) npx serverless deploy --stage local",
+    "backend:local": "STAGE=local npm run start:dev --workspace=apps/backend"
+  }
+}

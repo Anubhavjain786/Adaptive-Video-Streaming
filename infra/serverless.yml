@@ -1,0 +1,70 @@
+service: video-streaming-poc
+
+frameworkVersion: "3"
+
+plugins:
+  - serverless-localstack
+
+custom:
+  localstack:
+    # Stages that deploy to LocalStack instead of real AWS
+    stages:
+      - local
+    host: http://localhost
+    edgePort: 4566
+    autostart: false   # start LocalStack manually via docker compose
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-south-1
+  memorySize: 2048
+  timeout: 900
+  environment:
+    # Override FFMPEG_PATH for local stage (brew install ffmpeg on macOS)
+    # Lambda layer sets /opt/bin/ffmpeg; locally use the system ffmpeg
+    FFMPEG_PATH: ${env:FFMPEG_PATH, '/opt/bin/ffmpeg'}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:*
+          Resource: "*"
+
+layers:
+  ffmpeg:
+    path: layers/ffmpeg
+    name: ffmpeg-layer
+    description: Static FFmpeg binary for HLS transcoding
+
+functions:
+  transcoder:
+    handler: lambda/handler.handler
+    layers:
+      - { Ref: FfmpegLambdaLayer }
+    events:
+      - s3:
+          bucket: video-streaming-poc-${sls:stage}
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: originals/
+          existing: false
+
+resources:
+  Resources:
+    VideoBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: video-streaming-poc-${sls:stage}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - PUT
+                - GET
+              AllowedOrigins:
+                - "*"
+              MaxAge: 3000
