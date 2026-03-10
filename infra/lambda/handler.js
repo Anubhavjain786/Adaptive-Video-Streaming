@@ -7,7 +7,7 @@ const {
 } = require("@aws-sdk/client-s3");
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 
 // When running inside LocalStack, LOCALSTACK_HOSTNAME is injected automatically.
 // FFMPEG_PATH lets us override the binary path per-environment:
@@ -45,6 +45,28 @@ exports.handler = async (event) => {
     return;
   }
 
+  // --- Media type guard (Layer 1): file extension check ---
+  const ALLOWED_VIDEO_EXTENSIONS = new Set([
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".webm",
+    ".flv",
+    ".wmv",
+    ".m4v",
+    ".mpeg",
+    ".mpg",
+    ".3gp",
+  ]);
+  const fileExt = path.extname(key).toLowerCase();
+  if (!ALLOWED_VIDEO_EXTENSIONS.has(fileExt)) {
+    console.warn(
+      `Skipping "${key}" — unsupported extension "${fileExt}". Only video files are processed.`,
+    );
+    return;
+  }
+
   // videoId = filename without extension — must match backend VideosService derivation
   const fileName = path.basename(key);
   const videoId = fileName.split(".")[0];
@@ -57,6 +79,20 @@ exports.handler = async (event) => {
   const getResp = await s3.send(
     new GetObjectCommand({ Bucket: bucket, Key: key }),
   );
+
+  // --- Media type guard (Layer 2): S3 ContentType check ---
+  const contentType = (getResp.ContentType || "").toLowerCase();
+  if (
+    contentType &&
+    !contentType.startsWith("video/") &&
+    contentType !== "application/octet-stream"
+  ) {
+    console.warn(
+      `Skipping "${key}" — ContentType is "${contentType}", not a video. Aborting.`,
+    );
+    return;
+  }
+
   const bodyBuffer = await streamToBuffer(getResp.Body);
   fs.writeFileSync(inputPath, bodyBuffer);
 
@@ -80,8 +116,7 @@ exports.handler = async (event) => {
     fs.mkdirSync(outPath);
 
     // Segment naming: seg_%03d.ts  (e.g. seg_001.ts, seg_002.ts …)
-    const cmd = [
-      FFMPEG,
+    const args = [
       "-y",
       "-i",
       inputPath,
@@ -104,10 +139,10 @@ exports.handler = async (event) => {
       "-hls_segment_filename",
       `${outPath}/seg_%03d.ts`,
       `${outPath}/playlist.m3u8`,
-    ].join(" ");
+    ];
 
     console.log(`Transcoding ${r.name}…`);
-    execSync(cmd, { stdio: "inherit" });
+    execFileSync(FFMPEG, args, { stdio: "inherit" });
 
     variants.push({
       bandwidth: parseInt(r.bitrate) * 1000,

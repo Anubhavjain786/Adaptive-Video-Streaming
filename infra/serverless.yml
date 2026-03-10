@@ -1,6 +1,8 @@
-service: video-streaming-poc
+service: SB-video-streaming
 
 frameworkVersion: "3"
+
+useDotenv: true
 
 plugins:
   - serverless-localstack
@@ -17,7 +19,7 @@ custom:
 provider:
   name: aws
   runtime: nodejs18.x
-  region: ap-south-1
+  region: ${env:AWS_REGION, 'ap-south-1'}
   memorySize: 2048
   timeout: 900
   environment:
@@ -46,25 +48,8 @@ functions:
       - { Ref: FfmpegLambdaLayer }
     events:
       - s3:
-          bucket: video-streaming-poc-${sls:stage}
+          bucket: ${env:AWS_BUCKET_NAME}
           event: s3:ObjectCreated:*
           rules:
             - prefix: originals/
-          existing: false
-
-resources:
-  Resources:
-    VideoBucket:
-      Type: AWS::S3::Bucket
-      Properties:
-        BucketName: video-streaming-poc-${sls:stage}
-        CorsConfiguration:
-          CorsRules:
-            - AllowedHeaders:
-                - "*"
-              AllowedMethods:
-                - PUT
-                - GET
-              AllowedOrigins:
-                - "*"
-              MaxAge: 3000
+          existing: true

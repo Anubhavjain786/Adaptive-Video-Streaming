@@ -1,13 +1,13 @@
 import { Injectable } from "@nestjs/common";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const REGION = "ap-south-1";
-const STAGE = process.env.STAGE || "dev";
-const BUCKET = `video-streaming-poc-${STAGE}`;
-const IS_LOCAL = STAGE === "local";
-// LocalStack S3 endpoint (used when STAGE=local)
-const LOCALSTACK_ENDPOINT = "http://localhost:4566";
+const REGION = process.env.AWS_REGION || "ap-south-1";
+const BUCKET = process.env.AWS_BUCKET_NAME!;
 
 @Injectable()
 export class VideosService {
@@ -17,12 +17,6 @@ export class VideosService {
     // checksum into presigned URLs that breaks uploads from non-SDK clients.
     requestChecksumCalculation: "WHEN_REQUIRED" as any,
     responseChecksumValidation: "WHEN_REQUIRED" as any,
-    ...(IS_LOCAL && {
-      // Point SDK at LocalStack instead of real AWS
-      endpoint: LOCALSTACK_ENDPOINT,
-      forcePathStyle: true, // LocalStack requires path-style: localhost:4566/<bucket>/key
-      credentials: { accessKeyId: "test", secretAccessKey: "test" },
-    }),
   });
 
   /**
@@ -48,14 +42,49 @@ export class VideosService {
   }
 
   /**
-   * Return the S3 URL for the HLS master playlist of a transcoded video.
-   * Lambda outputs to processed/<videoId>/master.m3u8 after transcoding.
+   * Return the backend proxy path for the HLS master playlist.
+   * All HLS content (m3u8 + segments) is proxied through the backend
+   * so the private S3 bucket is never accessed directly by the browser.
    */
   getPlaybackUrl(videoId: string) {
-    // LocalStack uses path-style URLs; AWS uses virtual-hosted style
-    const playbackUrl = IS_LOCAL
-      ? `${LOCALSTACK_ENDPOINT}/${BUCKET}/processed/${videoId}/master.m3u8`
-      : `https://${BUCKET}.s3.${REGION}.amazonaws.com/processed/${videoId}/master.m3u8`;
+    const playbackUrl = `/videos/hls/processed/${videoId}/master.m3u8`;
     return { videoId, playbackUrl };
+  }
+
+  /**
+   * Proxy an HLS object (m3u8 playlist or .ts segment) from private S3.
+   * For m3u8 files, rewrites relative paths so they also go through this proxy.
+   */
+  async getHlsObject(
+    key: string,
+  ): Promise<{ body: Buffer; contentType: string }> {
+    const resp = await this.s3.send(
+      new GetObjectCommand({ Bucket: BUCKET, Key: key }),
+    );
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of resp.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(Buffer.from(chunk));
+    }
+    let body = Buffer.concat(chunks);
+    let contentType = resp.ContentType || "application/octet-stream";
+
+    // Rewrite relative URLs in m3u8 playlists so hls.js fetches segments
+    // through the backend proxy instead of directly to private S3.
+    if (key.endsWith(".m3u8")) {
+      const dir = key.substring(0, key.lastIndexOf("/"));
+      const text = body
+        .toString("utf8")
+        .replace(/^(?!#)([^\r\n]+)$/gm, (line) => {
+          // Skip absolute URLs
+          if (line.startsWith("http")) return line;
+          const resolvedKey = `${dir}/${line}`;
+          return `/videos/hls/${resolvedKey}`;
+        });
+      body = Buffer.from(text, "utf8");
+      contentType = "application/vnd.apple.mpegurl";
+    }
+
+    return { body, contentType };
   }
 }
