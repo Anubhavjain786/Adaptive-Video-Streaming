@@ -104,9 +104,13 @@ exports.handler = async (event) => {
 
   // 3. Transcode to HLS renditions
   const renditions = [
+    { name: "240p", scale: "426:240", bitrate: "400k" },
     { name: "360p", scale: "640:360", bitrate: "800k" },
     { name: "480p", scale: "854:480", bitrate: "1200k" },
     { name: "720p", scale: "1280:720", bitrate: "2500k" },
+    { name: "1080p", scale: "1920:1080", bitrate: "5000k" },
+    { name: "2k", scale: "2560:1440", bitrate: "10000k" },
+    { name: "4k", scale: "3840:2160", bitrate: "20000k" },
   ];
 
   const variants = [];
