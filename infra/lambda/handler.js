@@ -58,12 +58,29 @@ exports.handler = async (event) => {
     return;
   }
 
-  // videoId = filename without extension — must match backend VideosService derivation
-  const fileName = path.basename(key);
-  const videoId = fileName.split(".")[0];
+  // Derive bookingId + highlightType from expected key shape:
+  //   originals/bookings/<bookingId>/<highlightType>.mp4
+  const fileName = path.basename(key); // e.g. fastest_rally.mp4
+  const keyParts = key.split("/");
+  const bookingId = keyParts[2];
+  if (!bookingId) {
+    console.warn(`Unable to extract bookingId from key="${key}"`);
+    return;
+  }
+  const highlightType = fileName.split(".")[0];
+  if (!highlightType) {
+    console.warn(`Unable to extract highlightType from fileName="${fileName}"`);
+    return;
+  }
+
+  // For playback/proxy convention, we output per highlightType to avoid
+  // overwrite races between fastest/longest clips for the same bookingId.
+  const videoId = `booking/${bookingId}/${highlightType}`;
   const outputDir = `/tmp/output`;
 
-  console.log(`Processing videoId="${videoId}" from key="${key}"`);
+  console.log(
+    `Processing bookingId="${bookingId}" highlightType="${highlightType}" (file="${fileName}") from key="${key}"`,
+  );
 
   // 1. Check ContentType without downloading the body
   const headResp = await s3.send(
