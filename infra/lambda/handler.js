@@ -58,29 +58,17 @@ exports.handler = async (event) => {
     return;
   }
 
-  // Derive bookingId + highlightType from expected key shape:
-  //   originals/bookings/<bookingId>/<highlightType>.mp4
-  const fileName = path.basename(key); // e.g. fastest_rally.mp4
-  const keyParts = key.split("/");
-  const bookingId = keyParts[2];
-  if (!bookingId) {
-    console.warn(`Unable to extract bookingId from key="${key}"`);
+  // Generic mapping:
+  //   originals/<relativePath>.<ext> -> processed/<relativePath>/
+  const relativeKey = key.slice("originals/".length);
+  const assetPath = relativeKey.slice(0, -fileExt.length);
+  if (!assetPath) {
+    console.warn(`Unable to derive assetPath from key="${key}"`);
     return;
   }
-  const highlightType = fileName.split(".")[0];
-  if (!highlightType) {
-    console.warn(`Unable to extract highlightType from fileName="${fileName}"`);
-    return;
-  }
-
-  // For playback/proxy convention, we output per highlightType to avoid
-  // overwrite races between fastest/longest clips for the same bookingId.
-  const videoId = `booking/${bookingId}/${highlightType}`;
   const outputDir = `/tmp/output`;
 
-  console.log(
-    `Processing bookingId="${bookingId}" highlightType="${highlightType}" (file="${fileName}") from key="${key}"`,
-  );
+  console.log(`Processing assetPath="${assetPath}" from key="${key}"`);
 
   // 1. Check ContentType without downloading the body
   const headResp = await s3.send(
@@ -189,7 +177,7 @@ exports.handler = async (event) => {
   }
   fs.writeFileSync(`${outputDir}/master.m3u8`, master);
 
-  // 5. Upload all generated files to processed/<videoId>/ — in parallel
+  // 5. Upload all generated files to processed/<assetPath>/ — in parallel
   // fs.readdirSync with { recursive: true } requires Node 18.x
   const files = fs.readdirSync(outputDir, { recursive: true });
 
@@ -197,7 +185,7 @@ exports.handler = async (event) => {
     .filter((file) => !fs.statSync(path.join(outputDir, file)).isDirectory())
     .map((file) => {
       const fullPath = path.join(outputDir, file);
-      const s3Key = `processed/${videoId}/${file}`;
+      const s3Key = `processed/${assetPath}/${file}`;
       const ct = file.endsWith(".m3u8")
         ? "application/vnd.apple.mpegurl"
         : "video/MP2T";
@@ -217,6 +205,6 @@ exports.handler = async (event) => {
   await Promise.all(uploadTasks);
 
   console.log(
-    `Done — video "${videoId}" is ready at processed/${videoId}/master.m3u8`,
+    `Done — asset "${assetPath}" is ready at processed/${assetPath}/master.m3u8`,
   );
 };
