@@ -58,12 +58,17 @@ exports.handler = async (event) => {
     return;
   }
 
-  // videoId = filename without extension — must match backend VideosService derivation
-  const fileName = path.basename(key);
-  const videoId = fileName.split(".")[0];
+  // Generic mapping:
+  //   originals/<relativePath>.<ext> -> processed/<relativePath>/
+  const relativeKey = key.slice("originals/".length);
+  const assetPath = relativeKey.slice(0, -fileExt.length);
+  if (!assetPath) {
+    console.warn(`Unable to derive assetPath from key="${key}"`);
+    return;
+  }
   const outputDir = `/tmp/output`;
 
-  console.log(`Processing videoId="${videoId}" from key="${key}"`);
+  console.log(`Processing assetPath="${assetPath}" from key="${key}"`);
 
   // 1. Check ContentType without downloading the body
   const headResp = await s3.send(
@@ -172,7 +177,7 @@ exports.handler = async (event) => {
   }
   fs.writeFileSync(`${outputDir}/master.m3u8`, master);
 
-  // 5. Upload all generated files to processed/<videoId>/ — in parallel
+  // 5. Upload all generated files to processed/<assetPath>/ — in parallel
   // fs.readdirSync with { recursive: true } requires Node 18.x
   const files = fs.readdirSync(outputDir, { recursive: true });
 
@@ -180,7 +185,7 @@ exports.handler = async (event) => {
     .filter((file) => !fs.statSync(path.join(outputDir, file)).isDirectory())
     .map((file) => {
       const fullPath = path.join(outputDir, file);
-      const s3Key = `processed/${videoId}/${file}`;
+      const s3Key = `processed/${assetPath}/${file}`;
       const ct = file.endsWith(".m3u8")
         ? "application/vnd.apple.mpegurl"
         : "video/MP2T";
@@ -200,6 +205,6 @@ exports.handler = async (event) => {
   await Promise.all(uploadTasks);
 
   console.log(
-    `Done — video "${videoId}" is ready at processed/${videoId}/master.m3u8`,
+    `Done — asset "${assetPath}" is ready at processed/${assetPath}/master.m3u8`,
   );
 };
