@@ -1,0 +1,85 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="96" y1="48" x2="1184" y2="592" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#081F2D"/>
+      <stop offset="0.55" stop-color="#103B53"/>
+      <stop offset="1" stop-color="#0C6A6E"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFD166"/>
+      <stop offset="1" stop-color="#FF8A3D"/>
+    </linearGradient>
+    <filter id="blur" x="0" y="0" width="1280" height="640" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="40"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" rx="32" fill="url(#bg)"/>
+
+  <g filter="url(#blur)" opacity="0.55">
+    <circle cx="243" cy="130" r="110" fill="#56CCF2"/>
+    <circle cx="1050" cy="110" r="120" fill="#FFD166"/>
+    <circle cx="1080" cy="520" r="130" fill="#2DD4BF"/>
+  </g>
+
+  <rect x="66" y="70" width="1148" height="500" rx="28" fill="url(#card)" stroke="rgba(255,255,255,0.22)"/>
+
+  <text x="104" y="176" fill="#EAF7FF" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="66" font-weight="800">
+    Adaptive Video Streaming
+  </text>
+  <text x="104" y="228" fill="#CBE7F2" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="26" font-weight="500">
+    Serverless upload, transcoding, and HLS playback across web and mobile clients.
+  </text>
+
+  <g transform="translate(104 305)">
+    <rect width="224" height="126" rx="22" fill="#072A3A" stroke="#2CCCD3" stroke-opacity="0.45"/>
+    <text x="24" y="42" fill="#9CD5E3" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="18" font-weight="700">Client</text>
+    <text x="24" y="74" fill="#F8FDFF" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="28" font-weight="800">React + Flutter</text>
+    <text x="24" y="101" fill="#B6D9E5" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="16">Upload and playback</text>
+  </g>
+
+  <g transform="translate(400 305)">
+    <rect width="224" height="126" rx="22" fill="#0B3142" stroke="#58B6FF" stroke-opacity="0.45"/>
+    <text x="24" y="42" fill="#9FD7FF" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="18" font-weight="700">API</text>
+    <text x="24" y="74" fill="#F8FDFF" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="28" font-weight="800">NestJS</text>
+    <text x="24" y="101" fill="#B8DCEC" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="16">Presigned URLs + HLS proxy</text>
+  </g>
+
+  <g transform="translate(696 305)">
+    <rect width="224" height="126" rx="22" fill="#16394B" stroke="#F5A524" stroke-opacity="0.55"/>
+    <text x="24" y="42" fill="#FFD58C" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="18" font-weight="700">Processing</text>
+    <text x="24" y="74" fill="#FFF8EC" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="28" font-weight="800">Lambda + FFmpeg</text>
+    <text x="24" y="101" fill="#F2DDB8" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="16">HLS renditions on upload</text>
+  </g>
+
+  <g transform="translate(992 305)">
+    <rect width="158" height="126" rx="22" fill="#134142" stroke="#34D399" stroke-opacity="0.50"/>
+    <text x="24" y="42" fill="#97E9C7" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="18" font-weight="700">Storage</text>
+    <text x="24" y="74" fill="#F4FFFA" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="28" font-weight="800">S3</text>
+    <text x="24" y="101" fill="#C5ECD9" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="16">Originals + HLS</text>
+  </g>
+
+  <path d="M328 368H390" stroke="#89E2F6" stroke-width="8" stroke-linecap="round"/>
+  <path d="M624 368H686" stroke="#89E2F6" stroke-width="8" stroke-linecap="round"/>
+  <path d="M920 368H982" stroke="#FFD166" stroke-width="8" stroke-linecap="round"/>
+
+  <circle cx="359" cy="368" r="11" fill="#89E2F6"/>
+  <circle cx="655" cy="368" r="11" fill="#89E2F6"/>
+  <circle cx="951" cy="368" r="11" fill="#FFD166"/>
+
+  <rect x="104" y="474" width="296" height="44" rx="22" fill="#0A2C3A" stroke="#285A6C"/>
+  <text x="128" y="503" fill="#EAF7FF" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="18" font-weight="700">Presigned uploads</text>
+
+  <rect x="418" y="474" width="356" height="44" rx="22" fill="#0A2C3A" stroke="#285A6C"/>
+  <text x="442" y="503" fill="#EAF7FF" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="18" font-weight="700">Automatic multi-bitrate HLS output</text>
+
+  <rect x="792" y="474" width="278" height="44" rx="22" fill="#0A2C3A" stroke="#285A6C"/>
+  <text x="816" y="503" fill="#EAF7FF" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="18" font-weight="700">Private S3 playback proxy</text>
+
+  <rect x="1088" y="474" width="94" height="44" rx="22" fill="url(#accent)"/>
+  <text x="1110" y="503" fill="#16202A" font-family="Avenir, Montserrat, Segoe UI, sans-serif" font-size="18" font-weight="900">POC</text>
+</svg>
