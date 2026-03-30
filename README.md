@@ -9,6 +9,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Anubhavjain786/Adaptive-Video-Streaming/actions/workflows/ci.yml">
+    <img src="https://github.com/Anubhavjain786/Adaptive-Video-Streaming/actions/workflows/ci.yml/badge.svg" alt="CI status" />
+  </a>
   <img src="https://img.shields.io/badge/monorepo-npm%20workspaces-0f172a?style=for-the-badge" alt="npm workspaces" />
   <img src="https://img.shields.io/badge/backend-NestJS-e0234e?style=for-the-badge&logo=nestjs&logoColor=white" alt="NestJS" />
   <img src="https://img.shields.io/badge/frontend-React%20%2B%20Vite-0ea5e9?style=for-the-badge&logo=react&logoColor=white" alt="React and Vite" />
@@ -63,6 +66,23 @@ flowchart LR
 ```
 
 More detail is in [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+## Product Screens
+
+The current web client exposes two focused flows: direct upload and adaptive playback.
+
+### Upload flow
+
+![Upload flow](./assets/screenshots/web-upload.png)
+
+### Playback flow
+
+![Playback flow](./assets/screenshots/web-player.png)
+
+## Repo Assets
+
+- Social preview source: [assets/social-preview.html](./assets/social-preview.html)
+- Social preview output: `assets/social-preview.png`
 
 ## Stack
 

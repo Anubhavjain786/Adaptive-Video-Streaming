@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Adaptive Video Streaming Social Preview</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        font-family: Avenir, Montserrat, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(34, 211, 238, 0.30), transparent 34%),
+          radial-gradient(circle at bottom right, rgba(249, 115, 22, 0.24), transparent 30%),
+          linear-gradient(135deg, #04141f 0%, #082333 50%, #0c3f4a 100%);
+        color: #ecfeff;
+      }
+
+      .frame {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        padding: 42px;
+      }
+
+      .glow {
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(30px);
+        opacity: 0.65;
+      }
+
+      .glow.left {
+        top: 26px;
+        left: 34px;
+        width: 220px;
+        height: 220px;
+        background: rgba(34, 211, 238, 0.35);
+      }
+
+      .glow.right {
+        right: 80px;
+        bottom: 60px;
+        width: 260px;
+        height: 260px;
+        background: rgba(251, 191, 36, 0.28);
+      }
+
+      .card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        width: 100%;
+        height: 100%;
+        padding: 44px;
+        border-radius: 34px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: linear-gradient(180deg, rgba(9, 23, 35, 0.82), rgba(9, 23, 35, 0.58));
+        box-shadow: 0 28px 70px rgba(0, 0, 0, 0.34);
+        backdrop-filter: blur(14px);
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 68px;
+        height: 68px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, #22d3ee, #0f766e);
+        color: #05202c;
+        font-size: 26px;
+        font-weight: 900;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(34, 211, 238, 0.12);
+        color: #9fe8ff;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 12px 0 14px;
+        max-width: 760px;
+        font-size: 72px;
+        line-height: 0.95;
+        letter-spacing: -0.06em;
+      }
+
+      p {
+        margin: 0;
+        max-width: 720px;
+        color: #c7dbe6;
+        font-size: 26px;
+        line-height: 1.3;
+      }
+
+      .meta {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+
+      .meta-pill {
+        padding: 12px 18px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        background: rgba(15, 23, 42, 0.72);
+        color: #d7edf4;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.4fr 0.95fr;
+        gap: 22px;
+        align-items: end;
+      }
+
+      .feature-panel {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+
+      .feature {
+        padding: 18px;
+        border-radius: 22px;
+        background: rgba(7, 32, 46, 0.74);
+        border: 1px solid rgba(125, 211, 252, 0.14);
+      }
+
+      .feature strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 16px;
+        color: #9fe8ff;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .feature span {
+        display: block;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+      }
+
+      .stack {
+        display: grid;
+        gap: 12px;
+        padding: 22px;
+        border-radius: 24px;
+        background: rgba(10, 27, 39, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+      }
+
+      .stack-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(30, 41, 59, 0.58);
+        font-size: 18px;
+      }
+
+      .stack-row small {
+        color: #96a9b7;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="glow left"></div>
+      <div class="glow right"></div>
+
+      <div class="card">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-mark">AV</div>
+            <div>
+              <div class="eyebrow">Serverless HLS Pipeline</div>
+              <h1>Adaptive Video Streaming</h1>
+              <p>Direct S3 uploads, Lambda transcoding with FFmpeg, and backend-proxied HLS playback for web and mobile clients.</p>
+            </div>
+          </div>
+
+          <div class="meta">
+            <div class="meta-pill">NestJS</div>
+            <div class="meta-pill">React</div>
+            <div class="meta-pill">AWS Lambda</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="feature-panel">
+            <div class="feature">
+              <strong>Upload</strong>
+              <span>Presigned S3 flow</span>
+            </div>
+            <div class="feature">
+              <strong>Processing</strong>
+              <span>FFmpeg to HLS</span>
+            </div>
+            <div class="feature">
+              <strong>Playback</strong>
+              <span>Proxy + adaptive bitrate</span>
+            </div>
+          </div>
+
+          <div class="stack">
+            <div class="stack-row">
+              <span>Client</span>
+              <small>React + Flutter</small>
+            </div>
+            <div class="stack-row">
+              <span>API</span>
+              <small>NestJS</small>
+            </div>
+            <div class="stack-row">
+              <span>Infra</span>
+              <small>S3 + Lambda</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
