@@ -21,8 +21,7 @@ provider:
   runtime: nodejs18.x
   region: ${env:AWS_REGION, 'ap-south-1'}
   memorySize: 10240   # max — needed for 4K frame buffers
-  timeout: 900        # max — single-pass 4K transcode can take ~10 min
-  ephemeralStorageSize: 10240  # /tmp up to 10 GB for large source + 6 rendition segments
+  timeout: 900        # max — single-pass 4K transcode can take ~10 min  # /tmp up to 10 GB for large source + 6 rendition segments
   environment:
     # Override FFMPEG_PATH for local stage (brew install ffmpeg on macOS)
     # Lambda layer sets /opt/bin/ffmpeg; locally use the system ffmpeg
@@ -47,6 +46,7 @@ functions:
     handler: lambda/handler.handler
     layers:
       - { Ref: FfmpegLambdaLayer }
+    ephemeralStorageSize: 10240
     events:
       - s3:
           bucket: ${env:AWS_BUCKET_NAME}
