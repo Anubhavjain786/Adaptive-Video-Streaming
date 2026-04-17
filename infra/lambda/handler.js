@@ -8,7 +8,7 @@ const {
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const { spawn } = require("child_process");
 
 // When running inside LocalStack, LOCALSTACK_HOSTNAME is injected automatically.
 // FFMPEG_PATH lets us override the binary path per-environment:
@@ -122,47 +122,51 @@ exports.handler = async (event) => {
     fs.mkdirSync(`${outputDir}/${r.name}`);
   }
 
-  // Build a single FFmpeg command with multiple outputs.
-  // -threads 0 lets FFmpeg use all available vCPUs on the Lambda instance.
-  // protocol_whitelist is required for FFmpeg to read from an HTTPS presigned URL.
-  const args = [
-    "-y",
-    "-threads",
-    "0",
-    "-protocol_whitelist",
-    "file,http,https,tcp,tls,crypto",
-    "-i",
-    presignedUrl,
-  ];
-
-  for (const r of renditions) {
-    const outPath = `${outputDir}/${r.name}`;
-    args.push(
-      "-vf",
-      `scale=${r.scale}`,
-      "-c:v",
-      "h264",
-      "-preset",
-      "veryfast",
-      "-b:v",
-      r.bitrate,
-      "-c:a",
-      "aac",
-      "-b:a",
-      "128k",
-      "-hls_time",
-      "4",
-      "-hls_playlist_type",
-      "vod",
-      "-hls_segment_filename",
-      `${outPath}/seg_%03d.ts`,
-      `${outPath}/playlist.m3u8`,
-    );
+  console.log("Transcoding all renditions in parallel (4 at a time)…");
+  // Encode 4 renditions at a time instead of sequentially
+  const MAX_PARALLEL = 4;
+  for (let i = 0; i < renditions.length; i += MAX_PARALLEL) {
+    const batch = renditions.slice(i, i + MAX_PARALLEL);
+    await Promise.all(batch.map(r => {
+      return new Promise((resolve, reject) => {
+        const outPath = `${outputDir}/${r.name}`;
+        const renditionArgs = [
+          "-y", "-threads", "1", "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
+          "-i", presignedUrl,
+          "-vf", `scale=${r.scale}`, "-c:v", "h264", "-preset", "ultrafast",
+          "-b:v", r.bitrate, "-c:a", "aac", "-b:a", "128k",
+          "-hls_time", "4", "-hls_playlist_type", "vod",
+          "-hls_segment_filename", `${outPath}/seg_%03d.ts`,
+          `${outPath}/playlist.m3u8`
+        ];
+        const ffmpeg = spawn(FFMPEG, renditionArgs);
+        let stderrOutput = "";
+        let stdoutOutput = "";
+        
+        ffmpeg.stderr.on("data", (data) => {
+          stderrOutput += data.toString();
+          console.log(`[${r.name}] stderr: ${data.toString()}`);
+        });
+        
+        ffmpeg.stdout.on("data", (data) => {
+          stdoutOutput += data.toString();
+        });
+        
+        const timeout = setTimeout(() => { ffmpeg.kill(); reject(new Error(`Timeout: ${r.name}`)); }, 700_000);
+        ffmpeg.on("close", (code) => {
+          clearTimeout(timeout);
+          if (code === 0) {
+            resolve();
+          } else {
+            const errMsg = `Exit ${code}: ${r.name} - ${stderrOutput.slice(-500)}`;
+            console.error(`[${r.name}] Error: ${errMsg}`);
+            reject(new Error(errMsg));
+          }
+        });
+        ffmpeg.on("error", (err) => { clearTimeout(timeout); reject(err); });
+      });
+    }));
   }
-
-  console.log("Transcoding all renditions in one pass…");
-  // 840 s — single pass for 6 renditions incl. 4K, leaves 60 s buffer inside Lambda timeout
-  execFileSync(FFMPEG, args, { stdio: "inherit", timeout: 840_000 });
 
   const variants = renditions.map((r) => ({
     bandwidth: parseInt(r.bitrate) * 1000,
