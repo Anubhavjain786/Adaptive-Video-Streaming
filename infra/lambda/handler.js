@@ -1,14 +1,7 @@
 "use strict";
 
-const {
-  S3Client,
-  GetObjectCommand,
-  PutObjectCommand,
-} = require("@aws-sdk/client-s3");
-const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-const fs = require("fs");
-const path = require("path");
-const { spawn } = require("child_process");
+const { S3Client } = require("@aws-sdk/client-s3");
+const { transcodeObject } = require("../lib/transcode");
 
 // When running inside LocalStack, LOCALSTACK_HOSTNAME is injected automatically.
 // FFMPEG_PATH lets us override the binary path per-environment:
@@ -26,189 +19,13 @@ const s3 = new S3Client({
 });
 
 exports.handler = async (event) => {
+  if (process.env.STAGE !== "local") {
+    console.log("Skipping Lambda transcoder outside local stage.");
+    return;
+  }
+
   const record = event.Records[0];
   const bucket = record.s3.bucket.name;
   const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, " "));
-
-  // Only process objects under originals/
-  if (!key.startsWith("originals/")) {
-    console.log("Skipping non-originals key:", key);
-    return;
-  }
-
-  // --- Media type guard (Layer 1): file extension check ---
-  const ALLOWED_VIDEO_EXTENSIONS = new Set([
-    ".mp4",
-    ".mov",
-    ".avi",
-    ".mkv",
-    ".webm",
-    ".flv",
-    ".wmv",
-    ".m4v",
-    ".mpeg",
-    ".mpg",
-    ".3gp",
-  ]);
-  const fileExt = path.extname(key).toLowerCase();
-  if (!ALLOWED_VIDEO_EXTENSIONS.has(fileExt)) {
-    console.warn(
-      `Skipping "${key}" — unsupported extension "${fileExt}". Only video files are processed.`,
-    );
-    return;
-  }
-
-  // Generic mapping:
-  //   originals/<relativePath>.<ext> -> processed/<relativePath>/
-  const relativeKey = key.slice("originals/".length);
-  const assetPath = relativeKey.slice(0, -fileExt.length);
-  if (!assetPath) {
-    console.warn(`Unable to derive assetPath from key="${key}"`);
-    return;
-  }
-  const outputDir = `/tmp/output`;
-
-  console.log(`Processing assetPath="${assetPath}" from key="${key}"`);
-
-  // 1. Check ContentType without downloading the body
-  const headResp = await s3.send(
-    new GetObjectCommand({ Bucket: bucket, Key: key }),
-  );
-  // Consume and discard body immediately — we only needed the headers
-  headResp.Body.destroy();
-
-  // --- Media type guard (Layer 2): S3 ContentType check ---
-  const contentType = (headResp.ContentType || "").toLowerCase();
-  if (
-    contentType &&
-    !contentType.startsWith("video/") &&
-    contentType !== "application/octet-stream"
-  ) {
-    console.warn(
-      `Skipping "${key}" — ContentType is "${contentType}", not a video. Aborting.`,
-    );
-    return;
-  }
-
-  // 2. Generate a presigned URL so FFmpeg streams the source directly from S3.
-  //    This avoids downloading the file to /tmp — critical for 5 GB+ videos
-  //    since all 10 GB of Lambda ephemeral storage is then free for output segments.
-  //    Expiry = 3600 s (1 h) to outlast the longest possible transcode.
-  const presignedUrl = await getSignedUrl(
-    s3,
-    new GetObjectCommand({ Bucket: bucket, Key: key }),
-    { expiresIn: 3600 },
-  );
-
-  // 3. Create output dir
-  if (fs.existsSync(outputDir)) {
-    fs.rmSync(outputDir, { recursive: true });
-  }
-  fs.mkdirSync(outputDir);
-
-  // 3. Transcode all renditions in a single FFmpeg pass (one decode → 6 outputs).
-  //    Adding more outputs to a single pass is nearly free vs. separate invocations.
-  const renditions = [
-    { name: "360p", scale: "640:360", bitrate: "800k" },
-    { name: "480p", scale: "854:480", bitrate: "1200k" },
-    { name: "720p", scale: "1280:720", bitrate: "2500k" },
-    { name: "1080p", scale: "1920:1080", bitrate: "5000k" },
-    { name: "2k", scale: "2560:1440", bitrate: "10000k" },
-    { name: "4k", scale: "3840:2160", bitrate: "20000k" },
-  ];
-
-  // Pre-create output dirs
-  for (const r of renditions) {
-    fs.mkdirSync(`${outputDir}/${r.name}`);
-  }
-
-  console.log("Transcoding all renditions in parallel (4 at a time)…");
-  // Encode 4 renditions at a time instead of sequentially
-  const MAX_PARALLEL = 4;
-  for (let i = 0; i < renditions.length; i += MAX_PARALLEL) {
-    const batch = renditions.slice(i, i + MAX_PARALLEL);
-    await Promise.all(batch.map(r => {
-      return new Promise((resolve, reject) => {
-        const outPath = `${outputDir}/${r.name}`;
-        const renditionArgs = [
-          "-y", "-threads", "1", "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
-          "-i", presignedUrl,
-          "-vf", `scale=${r.scale}`, "-c:v", "h264", "-preset", "ultrafast",
-          "-b:v", r.bitrate, "-c:a", "aac", "-b:a", "128k",
-          "-hls_time", "4", "-hls_playlist_type", "vod",
-          "-hls_segment_filename", `${outPath}/seg_%03d.ts`,
-          `${outPath}/playlist.m3u8`
-        ];
-        const ffmpeg = spawn(FFMPEG, renditionArgs);
-        let stderrOutput = "";
-        let stdoutOutput = "";
-        
-        ffmpeg.stderr.on("data", (data) => {
-          stderrOutput += data.toString();
-          console.log(`[${r.name}] stderr: ${data.toString()}`);
-        });
-        
-        ffmpeg.stdout.on("data", (data) => {
-          stdoutOutput += data.toString();
-        });
-        
-        const timeout = setTimeout(() => { ffmpeg.kill(); reject(new Error(`Timeout: ${r.name}`)); }, 700_000);
-        ffmpeg.on("close", (code) => {
-          clearTimeout(timeout);
-          if (code === 0) {
-            resolve();
-          } else {
-            const errMsg = `Exit ${code}: ${r.name} - ${stderrOutput.slice(-500)}`;
-            console.error(`[${r.name}] Error: ${errMsg}`);
-            reject(new Error(errMsg));
-          }
-        });
-        ffmpeg.on("error", (err) => { clearTimeout(timeout); reject(err); });
-      });
-    }));
-  }
-
-  const variants = renditions.map((r) => ({
-    bandwidth: parseInt(r.bitrate) * 1000,
-    resolution: r.scale.replace(":", "x"),
-    uri: `${r.name}/playlist.m3u8`,
-  }));
-
-  // 4. Generate HLS master playlist
-  let master = "#EXTM3U\n";
-  for (const v of variants) {
-    master += `#EXT-X-STREAM-INF:BANDWIDTH=${v.bandwidth},RESOLUTION=${v.resolution}\n${v.uri}\n`;
-  }
-  fs.writeFileSync(`${outputDir}/master.m3u8`, master);
-
-  // 5. Upload all generated files to processed/<assetPath>/ — in parallel
-  // fs.readdirSync with { recursive: true } requires Node 18.x
-  const files = fs.readdirSync(outputDir, { recursive: true });
-
-  const uploadTasks = files
-    .filter((file) => !fs.statSync(path.join(outputDir, file)).isDirectory())
-    .map((file) => {
-      const fullPath = path.join(outputDir, file);
-      const s3Key = `processed/${assetPath}/${file}`;
-      const ct = file.endsWith(".m3u8")
-        ? "application/vnd.apple.mpegurl"
-        : "video/MP2T";
-
-      return s3
-        .send(
-          new PutObjectCommand({
-            Bucket: bucket,
-            Key: s3Key,
-            Body: fs.readFileSync(fullPath),
-            ContentType: ct,
-          }),
-        )
-        .then(() => console.log(`Uploaded: ${s3Key}`));
-    });
-
-  await Promise.all(uploadTasks);
-
-  console.log(
-    `Done — asset "${assetPath}" is ready at processed/${assetPath}/master.m3u8`,
-  );
+  await transcodeObject({ bucket, key, s3, ffmpegPath: FFMPEG });
 };

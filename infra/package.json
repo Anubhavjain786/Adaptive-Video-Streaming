@@ -1,14 +1,15 @@
 {
     "name": "@adaptive-streaming/infra",
     "version": "1.0.0",
-    "description": "Lambda transcoder + Serverless Framework infra",
+    "description": "AWS Batch transcoder + Serverless Framework infra",
     "scripts": {
-        "deploy": "npx serverless deploy --stage dev",
-        "deploy:prod": "npx serverless deploy --stage prod",
+        "deploy": "../deploy.sh dev",
+        "deploy:prod": "../deploy.sh prod",
         "deploy:local": "FFMPEG_PATH=$(which ffmpeg) npx serverless deploy --stage local",
         "remove": "npx serverless remove --stage dev"
     },
     "dependencies": {
+        "@aws-sdk/client-batch": "^3.0.0",
         "@aws-sdk/client-s3": "^3.0.0",
         "@aws-sdk/s3-request-presigner": "^3.0.0"
     },

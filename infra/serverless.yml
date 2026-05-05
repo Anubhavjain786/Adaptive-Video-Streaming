@@ -8,6 +8,11 @@ plugins:
   - serverless-localstack
 
 custom:
+  batch:
+    computeEnvironmentName: ${self:service}-${sls:stage}-transcode-ce
+    jobQueueName: ${self:service}-${sls:stage}-transcode-queue
+    jobDefinitionName: ${self:service}-${sls:stage}-transcode-job
+    logGroupName: /aws/batch/${self:service}-${sls:stage}-transcode
   localstack:
     # Stages that deploy to LocalStack instead of real AWS
     stages:
@@ -23,6 +28,7 @@ provider:
   memorySize: 10240   # max — needed for 4K frame buffers
   timeout: 900        # max — single-pass 4K transcode can take ~10 min  # /tmp up to 10 GB for large source + 6 rendition segments
   environment:
+    STAGE: ${sls:stage}
     # Override FFMPEG_PATH for local stage (brew install ffmpeg on macOS)
     # Lambda layer sets /opt/bin/ffmpeg; locally use the system ffmpeg
     FFMPEG_PATH: ${env:FFMPEG_PATH, '/opt/bin/ffmpeg'}
@@ -33,6 +39,10 @@ provider:
         - Effect: Allow
           Action:
             - s3:*
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - batch:SubmitJob
           Resource: "*"
 
 layers:
@@ -47,6 +57,12 @@ functions:
     layers:
       - { Ref: FfmpegLambdaLayer }
     ephemeralStorageSize: 10240
+  submitBatchJob:
+    handler: lambda/submit-job.handler
+    timeout: 30
+    environment:
+      BATCH_JOB_QUEUE: ${self:custom.batch.jobQueueName}
+      BATCH_JOB_DEFINITION: ${self:custom.batch.jobDefinitionName}
     events:
       - s3:
           bucket: ${env:AWS_BUCKET_NAME}
@@ -54,3 +70,152 @@ functions:
           rules:
             - prefix: originals/
           existing: true
+
+resources:
+  Conditions:
+    IsLocalStage:
+      Fn::Equals:
+        - ${sls:stage}
+        - local
+    IsNotLocalStage:
+      Fn::Not:
+        - Fn::Equals:
+            - ${sls:stage}
+            - local
+  Resources:
+    BatchServiceRole:
+      Type: AWS::IAM::Role
+      Condition: IsNotLocalStage
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - batch.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole
+
+    BatchExecutionRole:
+      Type: AWS::IAM::Role
+      Condition: IsNotLocalStage
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - ecs-tasks.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+    BatchJobRole:
+      Type: AWS::IAM::Role
+      Condition: IsNotLocalStage
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - ecs-tasks.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+          - PolicyName: batch-transcoder-s3-access
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:*
+                  Resource: "*"
+
+    BatchLogGroup:
+      Type: AWS::Logs::LogGroup
+      Condition: IsNotLocalStage
+      Properties:
+        LogGroupName: ${self:custom.batch.logGroupName}
+        RetentionInDays: 14
+
+    BatchComputeEnvironment:
+      Type: AWS::Batch::ComputeEnvironment
+      Condition: IsNotLocalStage
+      Properties:
+        ComputeEnvironmentName: ${self:custom.batch.computeEnvironmentName}
+        Type: MANAGED
+        State: ENABLED
+        ServiceRole:
+          Fn::GetAtt:
+            - BatchServiceRole
+            - Arn
+        ComputeResources:
+          Type: FARGATE
+          MaxvCpus: 256
+          Subnets: { Fn::Split: [",", "${env:BATCH_SUBNET_IDS, ''}"] }
+          SecurityGroupIds: { Fn::Split: [",", "${env:BATCH_SECURITY_GROUP_IDS, ''}"] }
+
+    BatchJobQueue:
+      Type: AWS::Batch::JobQueue
+      Condition: IsNotLocalStage
+      Properties:
+        JobQueueName: ${self:custom.batch.jobQueueName}
+        Priority: 1
+        State: ENABLED
+        ComputeEnvironmentOrder:
+          - Order: 1
+            ComputeEnvironment:
+              Ref: BatchComputeEnvironment
+
+    BatchJobDefinition:
+      Type: AWS::Batch::JobDefinition
+      Condition: IsNotLocalStage
+      Properties:
+        JobDefinitionName: ${self:custom.batch.jobDefinitionName}
+        Type: container
+        PlatformCapabilities:
+          - FARGATE
+        RetryStrategy:
+          Attempts: 1
+        Timeout:
+          AttemptDurationSeconds: 7200
+        ContainerProperties:
+          Image: ${env:TRANSCODER_IMAGE_URI, ''}
+          Command:
+            - node
+            - batch/worker.js
+          ExecutionRoleArn:
+            Fn::GetAtt:
+              - BatchExecutionRole
+              - Arn
+          JobRoleArn:
+            Fn::GetAtt:
+              - BatchJobRole
+              - Arn
+          ResourceRequirements:
+            - Type: VCPU
+              Value: '4'
+            - Type: MEMORY
+              Value: '16384'
+          FargatePlatformConfiguration:
+            PlatformVersion: LATEST
+          NetworkConfiguration:
+            AssignPublicIp: ENABLED
+          Environment:
+            - Name: AWS_REGION
+              Value: ${self:provider.region}
+            - Name: FFMPEG_PATH
+              Value: /usr/local/bin/ffmpeg
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: ${self:custom.batch.logGroupName}
+              awslogs-region: ${self:provider.region}
+              awslogs-stream-prefix: transcoder

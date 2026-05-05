@@ -12,7 +12,8 @@
   "scripts": {
     "backend": "npm run start:dev --workspace=apps/backend",
     "frontend": "npm run dev --workspace=apps/frontend",
-    "deploy": "cd infra && npm install && npx serverless deploy --stage dev",
+    "deploy": "./deploy.sh dev",
+    "deploy:prod": "./deploy.sh prod",
     "localstack:up": "docker compose up -d localstack",
     "localstack:down": "docker compose down",
     "deploy:local": "cd infra && npm install && FFMPEG_PATH=$(which ffmpeg) npx serverless deploy --stage local",
